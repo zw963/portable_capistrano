@@ -90,4 +90,4 @@ namespace :puma do
   end
 end
 
-after 'deploy:published', 'puma:restart'
+# after 'deploy:published', 'puma:restart'

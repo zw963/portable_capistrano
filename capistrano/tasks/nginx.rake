@@ -41,4 +41,4 @@ namespace :nginx do
   end
 end
 
-after 'deploy:finished', 'nginx:update'
+# after 'deploy:finished', 'nginx:update'

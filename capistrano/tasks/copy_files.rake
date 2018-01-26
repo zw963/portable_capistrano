@@ -1,4 +1,5 @@
 namespace :deploy do
+  desc 'Copy files'
   task :copy_files do
     next unless any? :copy_files
     on roles :app do
