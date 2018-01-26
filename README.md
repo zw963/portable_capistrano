@@ -1,10 +1,17 @@
-## Keep capistrano out of rails project.
+## Keep capistrano out of your's project.
 
 ### Run
+
+copy capistrano directory into `yours_capistrano_directory`, and then
 
 ```sh
 $: yours_capistrano_directory/capistrano/bin/cap staging deploy
 ```
+Or
+
+Add yours_capistrano_directory/capistrano/bin to yours `$PATH`, just run `cap staging deploy`.
+
+remember to remove capistrano's gems from Gemfile.
 
 ### Builtin tasks
 
@@ -35,11 +42,23 @@ cap whenever:update_crontab        # Update application's crontab entries using 
 
 ```
 
-You can see builtin tasks define in project `tasks` directory.
+You can see above builtin tasks define in this project `capistrano/tasks` directory.
 
-__NOTICE__: those tasks not enabled by default in `cap staging deploy`. 
+__NOTICE__: those tasks not enabled by default in `cap staging deploy`,you need uncomment code in task file 
+for task is auto invoked in special stage.
 
-you need uncomment code in task file for task is auto invoked in special stage.
+`whenever` is builtin support too, it will be invoke when deploy if exist `config/schedule.rb` in yours project.
 
-whenever is builtin support too, you need create your's own `config/schedule.rb` 
-to use it.
+you can run `whenever` command directly too, like following:
+
+```sh
+$: yours_capistrano_directory/capistrano/bin/whenever --help
+```
+
+### builtin other gems
+
+`capistrano-rails` and `capistrano-rvm` gem is packed.
+
+### Supported platform
+
+Only `linux-x86_64` and `osx` is support.
