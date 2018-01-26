@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e
+ROOT=`dirname "$0"`
+ROOT=`cd "$ROOT/.." &>/dev/null && pwd`
+
+case "$OSTYPE" in
+    darwin*)
+        eval "`\"$ROOT/bin/ruby_environment_osx\"`"
+        exec "$ROOT/bin.real/ruby_osx" "$@"
+        ;;
+    linux*)
+        case $(uname -m) in
+            i?86)
+                echo 'Not support!'
+                exit
+                ;;
+            *64)
+                eval "`\"$ROOT/bin/ruby_environment_linux_x86_64\"`"
+                exec "$ROOT/bin.real/ruby_linux_x86_64" "$@"
+                ;;
+        esac
+esac
