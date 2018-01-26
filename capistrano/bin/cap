@@ -5,4 +5,4 @@ export RUBYLIB=
 ROOT=`dirname "$0"`
 ROOT=`cd "$ROOT" &>/dev/null && pwd`
 
-exec -a cap $ROOT/ruby-2.2.2-capistrano $ROOT/../app/bin/cap -R $ROOT/../tasks "$@"
+exec -a cap $ROOT/ruby-2.2.2-capistrano -r $ROOT/../extensions $ROOT/../app/bin/cap -R $ROOT/../tasks "$@"
