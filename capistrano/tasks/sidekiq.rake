@@ -35,7 +35,7 @@ namespace :sidekiq do
     end
   end
 
-  desc 'quiet sidekiq daemon'
+  desc 'stop pulling new work and finish all current work'
   task :quiet do
     on roles(:worker) do
       if test_running(:sidekiq_pid)
