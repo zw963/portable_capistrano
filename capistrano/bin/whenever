@@ -1,4 +1,4 @@
 #!/bin/sh
 
 ROOT=${0%/*}
-exec -a whenever $ROOT/ruby-2.2.2-capistrano $ROOT/../app/bin/whenever "$@"
+exec -a whenever $ROOT/ruby-capistrano $ROOT/../app/bin/whenever "$@"
