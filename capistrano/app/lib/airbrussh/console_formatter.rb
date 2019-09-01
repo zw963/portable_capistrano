@@ -46,7 +46,7 @@ module Airbrussh
     def log_command_exit(command)
       return if debug?(command)
       command = decorate(command)
-      print_indented_line(command.exit_message(@log_file), -2)
+      print_indented_line(command.exit_message, -2)
     end
 
     def write(obj)
@@ -69,7 +69,20 @@ module Airbrussh
     def write_log_message(log_message)
       return if debug?(log_message)
       print_task_if_changed
-      print_indented_line(log_message.to_s)
+      print_indented_line(format_log_message(log_message))
+    end
+
+    def format_log_message(log_message)
+      case log_message.verbosity
+      when SSHKit::Logger::WARN
+        "#{yellow('WARN')}  #{log_message}"
+      when SSHKit::Logger::ERROR
+        "#{red('ERROR')} #{log_message}"
+      when SSHKit::Logger::FATAL
+        "#{red('FATAL')} #{log_message}"
+      else
+        log_message.to_s
+      end
     end
 
     # For SSHKit versions up to and including 1.7.1, the stdout and stderr
@@ -87,7 +100,7 @@ module Airbrussh
       return if current_task_name == last_printed_task
 
       self.last_printed_task = current_task_name
-      print_line("#{clock} #{blue(current_task_name)}")
+      print_line("#{config.task_prefix}#{clock} #{blue(current_task_name)}")
     end
 
     def clock

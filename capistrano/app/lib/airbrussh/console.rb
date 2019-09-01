@@ -1,4 +1,5 @@
 # encoding: UTF-8
+
 require "io/console"
 
 module Airbrussh
@@ -52,7 +53,10 @@ module Airbrussh
     end
 
     def strip_ascii_color(string)
-      (string || "").gsub(/\033\[[0-9;]*m/, "")
+      string ||= ""
+      string = to_utf8(string) unless string.valid_encoding?
+
+      string.gsub(/\033\[[0-9;]*m/, "")
     end
 
     def console_width
@@ -83,6 +87,11 @@ module Airbrussh
       string.encode("UTF-8").valid_encoding?
     rescue Encoding::UndefinedConversionError
       false
+    end
+
+    def to_utf8(string)
+      string.force_encoding("ASCII-8BIT")
+            .encode("UTF-8", :invalid => :replace, :undef => :replace)
     end
   end
 end

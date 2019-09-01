@@ -149,16 +149,28 @@ namespace :deploy do
   task :cleanup do
     on release_roles :all do |host|
       releases = capture(:ls, "-x", releases_path).split
-      if !(releases.all? { |e| /^\d{14}$/ =~ e })
-        warn t(:skip_cleanup, host: host.to_s)
-      elsif releases.count >= fetch(:keep_releases)
-        info t(:keeping_releases, host: host.to_s, keep_releases: fetch(:keep_releases), releases: releases.count)
-        directories = (releases - releases.last(fetch(:keep_releases)))
+      valid, invalid = releases.partition { |e| /^\d{14}$/ =~ e }
+
+      warn t(:skip_cleanup, host: host.to_s) if invalid.any?
+
+      if valid.count >= fetch(:keep_releases)
+        info t(:keeping_releases, host: host.to_s, keep_releases: fetch(:keep_releases), releases: valid.count)
+        directories = (valid - valid.last(fetch(:keep_releases))).map do |release|
+          releases_path.join(release).to_s
+        end
+        if test("[ -d #{current_path} ]")
+          current_release = capture(:readlink, current_path).to_s
+          if directories.include?(current_release)
+            warn t(:wont_delete_current_release, host: host.to_s)
+            directories.delete(current_release)
+          end
+        else
+          debug t(:no_current_release, host: host.to_s)
+        end
         if directories.any?
-          directories_str = directories.map do |release|
-            releases_path.join(release)
-          end.join(" ")
-          execute :rm, "-rf", directories_str
+          directories.each_slice(100) do |directories_batch|
+            execute :rm, "-rf", *directories_batch
+          end
         else
           info t(:no_old_releases, host: host.to_s, keep_releases: fetch(:keep_releases))
         end
@@ -227,7 +239,7 @@ namespace :deploy do
   task :set_current_revision  do
     on release_roles(:all) do
       within release_path do
-        execute :echo, "\"#{fetch(:current_revision)}\" >> REVISION"
+        execute :echo, "\"#{fetch(:current_revision)}\" > REVISION"
       end
     end
   end

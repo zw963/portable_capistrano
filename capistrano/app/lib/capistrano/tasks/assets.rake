@@ -65,7 +65,7 @@ namespace :deploy do
     task :precompile do
       on release_roles(fetch(:assets_roles)) do
         within release_path do
-          with rails_env: fetch(:rails_env) do
+          with rails_env: fetch(:rails_env), rails_groups: fetch(:rails_assets_groups) do
             execute :rake, "assets:precompile"
           end
         end
@@ -102,12 +102,8 @@ namespace :deploy do
     end
 
     def detect_manifest_path
-      %w(
-        .sprockets-manifest*
-        manifest*.*
-      ).each do |pattern|
-        candidate = release_path.join('public', fetch(:assets_prefix), pattern)
-        return capture(:ls, candidate).strip.gsub(/(\r|\n)/,' ') if test(:ls, candidate)
+      fetch(:assets_manifests).each do |candidate|
+        return capture(:ls, candidate).strip.gsub(/(\r|\n)/, ' ') if test(:ls, candidate)
       end
       msg = 'Rails assets manifest file not found.'
       warn msg
@@ -120,7 +116,11 @@ end
 # as assets_prefix will always have a default value
 namespace :deploy do
   task :set_linked_dirs do
-    set :linked_dirs, fetch(:linked_dirs, []).push("public/#{fetch(:assets_prefix)}").uniq
+    linked_dirs = fetch(:linked_dirs, [])
+    unless linked_dirs.include?('public')
+      linked_dirs << "public/#{fetch(:assets_prefix)}"
+      set :linked_dirs, linked_dirs.uniq
+    end
   end
 end
 
@@ -130,5 +130,10 @@ namespace :load do
   task :defaults do
     set :assets_roles, fetch(:assets_roles, [:web])
     set :assets_prefix, fetch(:assets_prefix, 'assets')
+    set :assets_manifests, -> {
+      %w[.sprockets-manifest* manifest*.*].map do |pattern|
+        release_path.join("public", fetch(:assets_prefix), pattern)
+      end
+    }
   end
 end

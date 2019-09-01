@@ -1,5 +1,3 @@
-require "rake"
-
 module Airbrussh
   module Rake
     # Maintains information about what Rake task is currently being invoked,
@@ -53,11 +51,12 @@ module Airbrussh
         attr_accessor :current_task_name
 
         def install_monkey_patch
+          require "rake"
           return if ::Rake::Task.instance_methods.include?(:_airbrussh_execute)
 
           ::Rake::Task.class_exec do
             alias_method :_airbrussh_execute, :execute
-            def execute(args=nil) # rubocop:disable Lint/NestedMethodDefinition
+            def execute(args=nil)
               ::Airbrussh::Rake::Context.current_task_name = name.to_s
               _airbrussh_execute(args)
             end

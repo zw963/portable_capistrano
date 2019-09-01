@@ -1,5 +1,6 @@
 require 'digest/sha1'
 require 'securerandom'
+require 'shellwords'
 
 # @author Lee Hambley
 module SSHKit
@@ -9,7 +10,7 @@ module SSHKit
 
     Failed = Class.new(SSHKit::StandardError)
 
-    attr_reader :command, :args, :options, :started_at, :started, :exit_status, :full_stdout, :full_stderr
+    attr_reader :command, :args, :options, :started_at, :started, :exit_status, :full_stdout, :full_stderr, :uuid
 
     # Initialize a new Command object
     #
@@ -21,11 +22,11 @@ module SSHKit
     def initialize(*args)
       raise ArgumentError, "Must pass arguments to Command.new" if args.empty?
       @options = default_options.merge(args.extract_options!)
-      @command = args.shift.to_s.strip.to_sym
+      @command = sanitize_command(args.shift)
       @args    = args
       @options.symbolize_keys!
-      sanitize_command!
       @stdout, @stderr, @full_stdout, @full_stderr = String.new, String.new, String.new, String.new
+      @uuid = Digest::SHA1.hexdigest(SecureRandom.random_bytes(10))[0..7]
     end
 
     def complete?
@@ -40,10 +41,6 @@ module SSHKit
     def started=(new_started)
       @started_at = Time.now
       @started = new_started
-    end
-
-    def uuid
-      @uuid ||= Digest::SHA1.hexdigest(SecureRandom.random_bytes(10))[0..7]
     end
 
     def success?
@@ -146,7 +143,7 @@ module SSHKit
 
     def within(&_block)
       return yield unless options[:in]
-      sprintf("cd #{options[:in]} && %s", yield)
+      "cd #{self.class.shellescape_except_tilde(options[:in])} && #{yield}"
     end
 
     def environment_hash
@@ -162,28 +159,30 @@ module SSHKit
     end
 
     def with(&_block)
-      return yield unless environment_hash.any?
-      "( export #{environment_string} ; #{yield} )"
+      env_string = environment_string
+      return yield if env_string.empty?
+      "( export #{env_string} ; #{yield} )"
     end
 
     def user(&_block)
       return yield unless options[:user]
-      "sudo -u #{options[:user]} #{environment_string + " " unless environment_string.empty?}-- sh -c '#{yield}'"
+      env_string = environment_string
+      "sudo -u #{options[:user].to_s.shellescape} #{env_string + " " unless env_string.empty?}-- sh -c #{yield.shellescape}"
     end
 
     def in_background(&_block)
       return yield unless options[:run_in_background]
-      sprintf("( nohup %s > /dev/null & )", yield)
+      "( nohup #{yield} > /dev/null & )"
     end
 
     def umask(&_block)
       return yield unless SSHKit.config.umask
-      sprintf("umask #{SSHKit.config.umask} && %s", yield)
+      "umask #{SSHKit.config.umask} && #{yield}"
     end
 
     def group(&_block)
       return yield unless options[:group]
-      "sg #{options[:group]} -c \\\"%s\\\"" % %Q{#{yield}}
+      "sg #{options[:group].to_s.shellescape} -c #{yield.shellescape}"
       # We could also use the so-called heredoc format perhaps:
       #"newgrp #{options[:group]} <<EOC \\\"%s\\\" EOC" % %Q{#{yield}}
     end
@@ -205,12 +204,24 @@ module SSHKit
       end
     end
 
+    def with_redaction
+      new_args = args.map{|arg| arg.is_a?(Redaction) ? '[REDACTED]' : arg }
+      redacted_cmd = dup
+      redacted_cmd.instance_variable_set(:@args, new_args)
+      redacted_cmd
+    end
+
     def to_s
       if should_map?
         [SSHKit.config.command_map[command.to_sym], *Array(args)].join(' ')
       else
         command.to_s
       end
+    end
+
+    # allow using home directory but escape everything else like spaces etc
+    def self.shellescape_except_tilde(file)
+      file.shellescape.gsub("\\~", "~")
     end
 
     private
@@ -222,16 +233,8 @@ module SSHKit
       }
     end
 
-    def sanitize_command!
-      command.to_s.strip!
-      if command.to_s.match("\n")
-        @command = String.new.tap do |cs|
-          command.to_s.lines.each do |line|
-            cs << line.strip
-            cs << '; ' unless line == command.to_s.lines.to_a.last
-          end
-        end
-      end
+    def sanitize_command(cmd)
+      cmd.to_s.lines.map(&:strip).join("; ")
     end
 
     def call_interaction_handler(stream_name, data, channel)

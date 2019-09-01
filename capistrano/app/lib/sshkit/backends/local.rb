@@ -10,9 +10,14 @@ module SSHKit
         super(Host.new(:local), &block)
       end
 
-      def upload!(local, remote, _options = {})
+      def upload!(local, remote, options = {})
+        remote = File.join(pwd_path, remote) unless remote.to_s.start_with?("/") || pwd_path.nil?
         if local.is_a?(String)
-          FileUtils.cp(local, remote)
+          if options[:recursive]
+            FileUtils.cp_r(local, remote)
+          else
+            FileUtils.cp(local, remote)
+          end
         else
           File.open(remote, "wb") do |f|
             IO.copy_stream(local, f)
@@ -21,6 +26,7 @@ module SSHKit
       end
 
       def download!(remote, local=nil, _options = {})
+        remote = File.join(pwd_path, remote) unless remote.to_s.start_with?("/") || pwd_path.nil?
         if local.nil?
           FileUtils.cp(remote, File.basename(remote))
         else
@@ -33,10 +39,8 @@ module SSHKit
       private
 
       def execute_command(cmd)
-        output.log_command_start(cmd)
-
+        output.log_command_start(cmd.with_redaction)
         cmd.started = Time.now
-
         Open3.popen3(cmd.to_command) do |stdin, stdout, stderr, wait_thr|
           stdout_thread = Thread.new do
             while (line = stdout.gets) do
@@ -44,19 +48,15 @@ module SSHKit
               output.log_command_data(cmd, :stdout, line)
             end
           end
-
           stderr_thread = Thread.new do
             while (line = stderr.gets) do
               cmd.on_stderr(stdin, line)
               output.log_command_data(cmd, :stderr, line)
             end
           end
-
           stdout_thread.join
           stderr_thread.join
-
           cmd.exit_status = wait_thr.value.to_i
-
           output.log_command_exit(cmd)
         end
       end

@@ -2,7 +2,7 @@ module Capistrano
   class Application < Rake::Application
     def initialize
       super
-      @rakefiles = %w{capfile Capfile capfile.rb Capfile.rb} << capfile
+      @rakefiles = %w{capfile Capfile capfile.rb Capfile.rb}
     end
 
     def name
@@ -76,6 +76,15 @@ module Capistrano
       end
     end
 
+    # allows the `cap install` task to load without a capfile
+    def find_rakefile_location
+      if (location = super).nil?
+        [capfile, Dir.pwd]
+      else
+        location
+      end
+    end
+
     private
 
     def backtrace_pattern
@@ -87,7 +96,7 @@ module Capistrano
     end
 
     def load_imports
-      if options.show_tasks
+      if options.show_tasks && Rake::Task.task_defined?("load:defaults")
         invoke "load:defaults"
         set(:stage, "")
         Dir[deploy_config_path].each { |f| add_import f }
@@ -96,7 +105,6 @@ module Capistrano
       super
     end
 
-    # allows the `cap install` task to load without a capfile
     def capfile
       File.expand_path(File.join(File.dirname(__FILE__), "..", "Capfile"))
     end

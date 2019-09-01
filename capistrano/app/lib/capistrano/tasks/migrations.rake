@@ -7,11 +7,12 @@ namespace :deploy do
     on fetch(:migration_servers) do
       conditionally_migrate = fetch(:conditionally_migrate)
       info '[deploy:migrate] Checking changes in db' if conditionally_migrate
-      if conditionally_migrate && test("diff -q #{release_path}/db #{current_path}/db")
+      if conditionally_migrate && test(:diff, "-qr #{release_path}/db #{current_path}/db")
         info '[deploy:migrate] Skip `deploy:migrate` (nothing changed in db)'
       else
         info '[deploy:migrate] Run `rake db:migrate`'
-        invoke :'deploy:migrating'
+        # NOTE: We access instance variable since the accessor was only added recently. Once capistrano-rails depends on rake 11+, we can revert the following line
+        invoke :'deploy:migrating' unless Rake::Task[:'deploy:migrating'].instance_variable_get(:@already_invoked)
       end
     end
   end

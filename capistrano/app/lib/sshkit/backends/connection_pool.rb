@@ -21,7 +21,7 @@ end
 
 # The ConnectionPool caches connections and allows them to be reused, so long as
 # the reuse happens within the `idle_timeout` period. Timed out connections are
-# closed, forcing a new connection to be used in that case.
+# eventually closed, forcing a new connection to be used in that case.
 #
 # Additionally, a background thread is started to check for abandoned
 # connections that have timed out without any attempt at being reused. These
@@ -46,7 +46,11 @@ class SSHKit::Backend::ConnectionPool
     @caches = {}
     @caches.extend(MonitorMixin)
     @timed_out_connections = Queue.new
-    Thread.new { run_eviction_loop }
+
+    # Spin up eviction loop only if caching is enabled
+    if cache_enabled?
+      Thread.new { run_eviction_loop }
+    end
   end
 
   # Creates a new connection or reuses a cached connection (if possible) and
@@ -61,6 +65,9 @@ class SSHKit::Backend::ConnectionPool
     yield(conn)
   ensure
     cache.push(conn) unless conn.nil?
+    # Sometimes the args mutate as a result of opening a connection. In this
+    # case we need to update the cache key to match the new args.
+    update_key_if_args_changed(cache, args)
   end
 
   # Immediately remove all cached connections, without closing them. This only
@@ -84,6 +91,10 @@ class SSHKit::Backend::ConnectionPool
 
   private
 
+  def cache_key_for_connection_args(args)
+    args.hash
+  end
+
   def cache_enabled?
     idle_timeout && idle_timeout > 0
   end
@@ -91,7 +102,7 @@ class SSHKit::Backend::ConnectionPool
   # Look up a Cache that matches the given connection arguments.
   def find_cache(args)
     if cache_enabled?
-      key = args.to_s
+      key = cache_key_for_connection_args(args)
       caches[key] || thread_safe_find_or_create_cache(key)
     else
       NilCache.new(method(:silently_close_connection))
@@ -103,8 +114,19 @@ class SSHKit::Backend::ConnectionPool
   def thread_safe_find_or_create_cache(key)
     caches.synchronize do
       caches[key] ||= begin
-        Cache.new(idle_timeout, method(:silently_close_connection_later))
+        Cache.new(key, idle_timeout, method(:silently_close_connection_later))
       end
+    end
+  end
+
+  # Update cache key with changed args to prevent cache miss
+  def update_key_if_args_changed(cache, args)
+    new_key = cache_key_for_connection_args(args)
+
+    caches.synchronize do
+      return if cache.same_key?(new_key)
+      caches[new_key] = caches.delete(cache.key)
+      cache.key = new_key
     end
   end
 
@@ -115,7 +137,7 @@ class SSHKit::Backend::ConnectionPool
       process_deferred_close
 
       # Periodically sweep all Caches to evict stale connections
-      sleep([idle_timeout, 5].min)
+      sleep(5)
       caches.values.each(&:evict)
     end
   end

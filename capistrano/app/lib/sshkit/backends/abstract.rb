@@ -1,3 +1,5 @@
+require 'shellwords'
+
 module SSHKit
 
   module Backend
@@ -42,6 +44,10 @@ module SSHKit
         @group = nil
       end
 
+      def redact(arg) # Used in execute_command to hide redact() args a user passes in
+        arg.to_s.extend(Redaction) # to_s due to our inability to extend Integer, etc
+      end
+
       def make(commands=[])
         execute :make, commands
       end
@@ -51,7 +57,7 @@ module SSHKit
       end
 
       def test(*args)
-        options = args.extract_options!.merge(raise_on_non_zero_exit: false, verbosity: Logger::DEBUG)
+        options = { verbosity: Logger::DEBUG, raise_on_non_zero_exit: false }.merge(args.extract_options!)
         create_command_and_execute(args, options).success?
       end
 
@@ -76,13 +82,14 @@ module SSHKit
 
       def within(directory, &_block)
         (@pwd ||= []).push directory.to_s
+        escaped = Command.shellescape_except_tilde(pwd_path)
         execute <<-EOTEST, verbosity: Logger::DEBUG
-          if test ! -d #{File.join(@pwd)}
-            then echo "Directory does not exist '#{File.join(@pwd)}'" 1>&2
+          if test ! -d #{escaped}
+            then echo "Directory does not exist '#{escaped}'" 1>&2
             false
           fi
-          EOTEST
-          yield
+        EOTEST
+        yield
       ensure
         @pwd.pop
       end
@@ -104,8 +111,8 @@ module SSHKit
           @group = nil
         end
         execute <<-EOTEST, verbosity: Logger::DEBUG
-          if ! sudo -u #{@user} whoami > /dev/null
-            then echo "You cannot switch to user '#{@user}' using sudo, please check the sudoers file" 1>&2
+          if ! sudo -u #{@user.to_s.shellescape} whoami > /dev/null
+            then echo "You cannot switch to user '#{@user.to_s.shellescape}' using sudo, please check the sudoers file" 1>&2
             false
           fi
         EOTEST

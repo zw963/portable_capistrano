@@ -15,7 +15,7 @@ module Capistrano
       end
 
       def releases_path
-        deploy_path.join("releases")
+        deploy_path.join(fetch(:releases_directory, "releases"))
       end
 
       def release_path
@@ -36,20 +36,7 @@ module Capistrano
       end
 
       def repo_url
-        require "cgi"
-        require "uri"
-        if fetch(:git_http_username) && fetch(:git_http_password)
-          URI.parse(fetch(:repo_url)).tap do |repo_uri|
-            repo_uri.user     = fetch(:git_http_username)
-            repo_uri.password = CGI.escape(fetch(:git_http_password))
-          end.to_s
-        elsif fetch(:git_http_username)
-          URI.parse(fetch(:repo_url)).tap do |repo_uri|
-            repo_uri.user = fetch(:git_http_username)
-          end.to_s
-        else
-          fetch(:repo_url)
-        end
+        fetch(:repo_url)
       end
 
       def repo_path
@@ -57,7 +44,7 @@ module Capistrano
       end
 
       def shared_path
-        deploy_path.join("shared")
+        deploy_path.join(fetch(:shared_directory, "shared"))
       end
 
       def revision_log

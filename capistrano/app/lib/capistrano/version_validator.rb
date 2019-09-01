@@ -14,8 +14,7 @@ module Capistrano
     attr_reader :version
 
     def match?
-      # available =~ requested
-      true
+      available =~ requested
     end
 
     def current_version
